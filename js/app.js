@@ -1,5 +1,5 @@
 /* 포켓몬 땅따먹기 — 화면 (rules.js 의 엔진을 쓴다) */
-import * as A from "./audio.js?v=2026-11-08b";
+import * as A from "./audio.js?v=2026-11-08c";
 
 const R = window.Rules, C = window.Cpu, LINES = window.Lines.LINES;
 const QS = new URLSearchParams(location.search);
@@ -103,11 +103,13 @@ function showHelp() {
       <li><span>🗺️</span><span>처음엔 판이 비어 있어요. <b>첫 땅은 어디든</b> 놓을 수 있어요 — 상대 바로 옆에 붙어서 막아도 돼요!</span></li>
       <li><span>🎲</span><span>주사위를 굴려요. 나온 숫자만큼 <b>이어진 칸</b>을 골라 <b>내 땅에 붙여요</b>. (옆으로·위아래로만, 대각선은 안 돼요)</span></li>
       <li><span>👆</span><span>내 땅 옆 빛나는 칸부터 손가락으로 쭉 그으면 돼요. 한 칸씩 톡톡 눌러도 돼요. 고른 칸을 다시 누르면 빠져요.</span></li>
-      <li><span>🚧</span><span>상대가 넓어질 길을 먼저 막아요! 붙일 곳이 없으면 차례가 넘어가요.</span></li>
+      <li><span>🌱</span><span><b>씨앗 심기</b>: 내 땅에서 <b>떨어진 곳</b>에도 놓을 수 있어요. 대신 숫자의 <b>절반</b>만! (5 → 3칸)</span></li>
+      <li><span>🔄</span><span><b>끼우기</b>: 상대 칸 1~2개를 <b>내 칸 사이에 일자로 끼우면</b> 내 땅으로 뒤집혀요! (상대 첫 칸은 안 돼요)</span></li>
+      <li><span>🏠</span><span><b>둘러싸기</b>: 빈 칸을 내 땅으로 <b>빙 둘러싸면</b> (판 끝·바위도 벽) 안쪽이 한꺼번에 내 땅! 작은 곳(${Math.round(setup.size * setup.size * 0.12)}칸 이하)만 돼요.</span></li>
       <li><span><span class="ball"></span></span><span><b>포켓볼</b>: 주사위 한 번 더! &nbsp; ⭐ <b>별</b>: 끝날 때 +2점 &nbsp; 🎁 <b>상자</b>: 기술 카드</span></li>
       <li><span>🃏</span><span><b>기술 카드</b>는 주사위 굴리기 전에 한 장 써요. 🎲다시 굴리기 · ➕2칸 더 · ⚡상대 칸 빼앗기 · 🪨바위 세우기</span></li>
-      <li><span>🏆</span><span>둘 다 더 붙일 곳이 없으면 끝! <b>가장 크게 이어진 내 땅 칸 수 + 별</b>이 많으면 이겨요.</span></li>
-      <li><span>⚖️</span><span>먼저 하는 사람은 첫 차례에 <b>1칸만</b> 놓아요.</span></li>
+      <li><span>🏆</span><span>판이 다 차면 끝! <b>가장 크게 이어진 내 땅 칸 수 + 별</b>이 많으면 이겨요. (떨어진 씨앗은 이어 붙여야 점수가 돼요)</span></li>
+      <li><span>⚖️</span><span>먼저 하는 사람은 첫 차례에 <b>1칸만</b> 놓아요. 첫 땅엔 🎁 상자·포켓볼 칸을 못 골라요.</span></li>
     </ul>
     <div class="row"><button class="btn big primary" data-v="ok">알겠어요!</button></div>`);
   pick(d).then(() => d.remove());
@@ -262,16 +264,17 @@ function update() {
   const s = G.s, ui = G.ui, n = s.size, p = s.turn;
   const placing = s.phase === "place" && !isCpu(p) && !ui.busy;
   const can = new Set();
-  if (placing && ui.sel.length < s.need && (ui.sel.length || R.hasLand(s, p))) { // 첫 덩어리 첫 칸은 어디든이라 안 빛나게
-    for (let i = 0; i < s.owner.length; i++) if (R.canAdd(s, p, ui.sel, i)) can.add(i);
-  }
+  if (placing && ui.sel.length) { for (let i = 0; i < s.owner.length; i++) if (R.canAdd(s, p, ui.sel, i)) can.add(i); }
+  else if (placing && R.hasLand(s, p) && s.need) R.frontier(s, p).forEach((i) => can.add(i)); // 붙이기 시작 칸만 빛남 (씨앗은 아무 데나)
+  const seedSel = placing && ui.sel.length && R.kindOf(s, p, ui.sel) === "seed";
+  const ban = placing && !R.hasLand(s, p); // 첫 땅: 상자·포켓볼 칸 못 고름
   let targets = new Set();
   if (ui.card != null && !isCpu(p)) {
     const eff = s.players[p].cards[ui.card].effect;
     if (eff === "steal") targets = new Set(R.stealTargets(s, p));
     if (eff === "wall") targets = new Set(R.wallTargets(s));
   }
-  const done = ui.sel.length === s.need && s.need > 0 && R.validGroup(s, p, ui.sel);
+  const done = ui.sel.length > 0 && R.validGroup(s, p, ui.sel);
   const cells = $$(".board .cell");
   cells.forEach((el, i) => {
     const o = s.owner[i];
@@ -284,6 +287,8 @@ function update() {
     const si = ui.sel.indexOf(i);
     cl.toggle("sel", si >= 0);
     cl.toggle("done", si >= 0 && done);
+    cl.toggle("seedsel", si >= 0 && !!seedSel);
+    cl.toggle("ban", ban && R.firstBan(s, i) && o === R.EMPTY);
     cl.toggle("target", targets.has(i) && !ui.targets.includes(i) && s.owner[i] !== R.EMPTY); // 빼앗기만 표시 (바위는 빈 칸 전부라 표시 안 함)
     cl.toggle("picked", ui.targets.includes(i));
     el.style.setProperty("--pcs", si >= 0 ? `var(--c${p})` : "");
@@ -357,10 +362,19 @@ function renderPanel(p) {
     return;
   }
   if (s.phase === "place") {
-    const full = ui.sel.length === s.need;
+    const kind = ui.sel.length ? R.kindOf(s, p, ui.sel) : null;
+    const full = ui.sel.length > 0 && R.validGroup(s, p, ui.sel);
+    const tgt = kind ? R.targetOf(s, kind) : s.need;
+    const seedTxt = s.seedNeed ? `🌱 떨어진 곳엔 <b>${s.seedNeed}칸</b>` : "";
+    const hint = full ? (kind === "seed" ? "🌱 씨앗 준비 끝! <b>놓기</b>를 눌러요" : "좋아요! <b>놓기</b>를 눌러요")
+      : kind === "seed" ? `🌱 씨앗 심는 중 — <b>${s.seedNeed}칸</b>까지<br><small>내 땅에 닿게 이으면 ${s.need}칸</small>`
+      : ui.sel.length ? "이어서 더 골라요"
+      : !R.hasLand(s, p) ? "첫 땅은 <b>판 어디든!</b><br>상대 바로 옆에서 막아도 돼요"
+      : s.need ? `빛나는 칸부터 쭉 그어 <b>${s.need}칸</b> 붙여요<br>${seedTxt}`
+      : `붙일 곳이 없어요!<br>${seedTxt}`;
     act.innerHTML = `${ui.diceHtml || ""}
-      <div class="count">${ui.sel.length} <small>/ ${s.need}</small></div>
-      <div class="hint">${full ? "좋아요! <b>놓기</b>를 눌러요" : ui.sel.length ? "이어서 더 골라요" : !R.hasLand(s, p) ? "첫 땅은 <b>판 어디든!</b><br>상대 바로 옆에서 막아도 돼요" : "빛나는 칸부터 쭉 그어요"}</div>
+      <div class="count ${kind === "seed" ? "seed" : ""}">${kind === "seed" ? "🌱" : ""}${ui.sel.length} <small>/ ${tgt}</small></div>
+      <div class="hint">${hint}</div>
       <div class="dice-row"><button class="btn go big" data-a="place" ${full ? "" : "disabled"}>놓기</button>
       <button class="btn" data-a="clear" ${ui.sel.length ? "" : "disabled"}>↺</button></div>`;
   }
@@ -453,7 +467,12 @@ function addCell(i, loud) {
     el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
   } else if (loud) {
     flash(i);
-    if (s.owner[i] === R.EMPTY && ui.sel.length < s.need) toast(ui.sel.length ? "고른 칸 바로 옆에 이어서 골라요" : "내 땅 바로 옆(빛나는 칸)부터 골라요", 1400);
+    if (s.owner[i] !== R.EMPTY) return;
+    if (!R.hasLand(s, s.turn) && R.firstBan(s, i)) return toast("첫 땅엔 🎁 상자·포켓볼 칸을 못 골라요!", 1600);
+    const adj = !ui.sel.length || R.nbrs(s.size, i).some((j) => ui.sel.includes(j));
+    if (!adj) return toast("고른 칸 바로 옆에 이어서 골라요", 1400);
+    if (R.kindOf(s, s.turn, ui.sel.concat(i)) === "seed") toast(`🌱 떨어진 곳엔 <b>${s.seedNeed}칸</b>까지만! 내 땅에 붙이면 ${s.need}칸`, 1800);
+    else toast(`벌써 <b>${s.need}칸</b> 다 골랐어요`, 1400);
   }
 }
 function tapTarget(i) {
@@ -472,16 +491,19 @@ function tapTarget(i) {
 async function useCard() {
   const s = G.s, ui = G.ui, p = s.turn;
   const c = s.players[p].cards[ui.card];
-  try { R.useCard(s, ui.card, ui.targets.slice()); } catch (e) { return toast(e.message); }
+  let ev;
+  try { ev = R.useCard(s, ui.card, ui.targets.slice()); } catch (e) { return toast(e.message); }
   const targets = ui.targets.slice();
   ui.card = null; ui.targets = []; ui.busy = true;
   sfx("star");
-  await showCardUse(p, c, targets);
+  await showCardUse(p, c, targets, ev);
   ui.busy = false;
+  G.seen = s.log.length;
+  if (s.phase === "over") return startTurn();
   update();
   save();
 }
-async function showCardUse(p, c, targets) {
+async function showCardUse(p, c, targets, ev) {
   const e = R.EFFECTS[c.effect];
   toast(`${e.icon} <b>${esc(c.name)}</b>! ${e.text}`, 2200);
   if (c.effect === "steal") { say("steal"); targets.forEach((i) => floatText(i, "⚡")); }
@@ -490,6 +512,7 @@ async function showCardUse(p, c, targets) {
   targets.forEach((i) => { const el = $(`.cell[data-i="${i}"]`); el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); });
   if (c.effect === "steal") checkMonCell();
   await wait(900);
+  if (ev) { await showCaps(ev.caps); await showGot(ev.got, p); }
 }
 function checkMonCell() {
   [0, 1].forEach((p) => { if (G.mon[p] != null && G.s.owner[G.mon[p]] !== p) G.mon[p] = G.s.players[p].home; });
@@ -514,7 +537,7 @@ async function doRoll(force) {
   G.seen = s.log.length;
   if (ev.stuck) {
     say("room");
-    toast(`😵 붙일 칸이 없어요! 차례가 넘어가요`);
+    toast(`😵 놓을 칸이 없어요! 차례가 넘어가요`);
     renderPanel(p);
     await wait(1600);
     ui.busy = false; ui.diceHtml = "";
@@ -523,7 +546,8 @@ async function doRoll(force) {
   say("n" + Math.min(8, ev.need));
   if (ev.first) toast(`⚖️ 먼저 하는 사람은 첫 차례에 <b>1칸만!</b> 판 어디든 골라요`, 2600);
   else if (ev.want > ev.die) toast(`➕ ${ev.die} + 2 = <b>${ev.want}칸</b>!`, 2000);
-  if (ev.need < ev.want) toast(`이어진 빈 칸이 <b>${ev.need}칸</b>뿐이라 ${ev.need}칸만 붙여요`, 2600);
+  if (ev.need === 0) toast(`붙일 곳이 없어요! 🌱 떨어진 곳에 <b>${ev.seedNeed}칸</b> 심어요`, 2600);
+  else if (ev.need < ev.want && !ev.first) toast(`이어진 빈 칸이 <b>${ev.need}칸</b>뿐이라 ${ev.need}칸만 붙여요`, 2600);
   ui.sel = [];
   ui.busy = false;
   update();
@@ -531,34 +555,71 @@ async function doRoll(force) {
 
 async function doPlace(sel) {
   const s = G.s, ui = G.ui, p = s.turn;
-  if (!R.validGroup(s, p, sel)) return toast("이어진 칸을 내 땅에 붙여야 해요");
+  if (!R.validGroup(s, p, sel)) return toast(R.kindOf(s, p, sel) === "seed" ? `🌱 떨어진 곳엔 이어진 ${s.seedNeed}칸을 심어요` : "이어진 칸을 내 땅에 붙여야 해요");
   ui.busy = true;
   const ev = R.place(s, sel);
   G.seen = s.log.length;
   ui.sel = [];
   sfx("stamp");
-  // 칸이 차례로 톡톡 생긴다
+  // 칸이 차례로 톡톡 생긴다 → 끼운 칸 뒤집힘 → 둘러싼 곳 채움
   const owner = s.owner.slice();
   sel.forEach((i) => (s.owner[i] = R.EMPTY));
+  ev.flips.forEach((i) => (s.owner[i] = 1 - p));
+  ev.caps.forEach((c) => c.cells.forEach((i) => (s.owner[i] = R.EMPTY)));
   for (const i of sel) {
     s.owner[i] = owner[i];
     update();
-    const el = $(`.cell[data-i="${i}"]`);
-    el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+    popCell(i);
     await wait(90);
   }
   G.mon[p] = sel[sel.length - 1];
   placeMons(true);
-  for (const g of ev.got) {
-    if (g.kind === "ball") { say("again"); sfx("star"); floatText(g.cell, "한 번 더!"); toast("⚪ 포켓볼! <b>주사위 한 번 더!</b>", 2000); }
-    else if (g.kind === "star" || g.kind === "box-star") { say("star"); sfx("star"); floatText(g.cell, "⭐ +2"); toast(g.kind === "star" ? "⭐ 별! 끝날 때 <b>+2점</b>" : "🎁 카드가 꽉 차서 ⭐ 별로 바꿨어요!", 2000); }
-    else if (g.kind === "box") { say("card"); sfx("star"); floatText(g.cell, "🎁"); toast(`🎁 기술 카드! <b>${R.EFFECTS[g.card.effect].icon} ${R.EFFECTS[g.card.effect].short}</b>`, 2200); }
-    await wait(1000);
+  if (ev.kind === "seed") { say("seed"); floatText(sel[0], "🌱"); toast("🌱 씨앗을 심었어요! 나중에 이어 붙이면 점수가 커져요", 1800); await wait(700); }
+  if (ev.flips.length) {
+    await wait(300);
+    say("flip"); sfx("star");
+    toast(`🔄 끼웠다! 상대 칸 <b>${ev.flips.length}개</b>가 뒤집혀요`, 1800);
+    for (const i of ev.flips) { s.owner[i] = owner[i]; update(); popCell(i, "flip"); floatText(i, "🔄"); await wait(220); }
+    checkMonCell();
+    await wait(700);
   }
+  await showCaps(ev.caps);
+  await showGot(ev.got, p);
   await wait(250);
   ui.busy = false;
   ui.diceHtml = "";
   afterTurn();
+}
+
+function popCell(i, cls = "pop") {
+  const el = $(`.cell[data-i="${i}"]`);
+  if (!el) return;
+  el.classList.remove("pop", "flip"); void el.offsetWidth; el.classList.add(cls);
+}
+/** 둘러싸기 연출 — 판엔 이미 반영돼 있으면 잠깐 비웠다가 채운다 */
+async function showCaps(caps) {
+  const s = G.s;
+  for (const c of caps) {
+    c.cells.forEach((i) => (s.owner[i] = R.EMPTY));
+    update();
+    await wait(250);
+    const name = R.POKE[s.players[c.p].poke].name;
+    say("wrap"); sfx("right");
+    toast(`🏠 빙 둘러쌌다! <b>${name}</b> 땅 <b>${c.cells.length}칸</b> 차지!`, 2000);
+    for (const i of c.cells) { s.owner[i] = c.p; update(); popCell(i); await wait(70); }
+    await wait(800);
+  }
+}
+async function showGot(got, actor) {
+  const s = G.s;
+  for (const g of got) {
+    const who = g.p !== actor ? `${R.POKE[s.players[g.p].poke].name}: ` : "";
+    if (g.kind === "ball") { say("again"); sfx("star"); floatText(g.cell, "한 번 더!"); toast("⚪ 포켓볼! <b>주사위 한 번 더!</b>", 2000); }
+    else if (g.kind === "star" || g.kind === "box-star" || g.kind === "ball-star") { say("star"); sfx("star"); floatText(g.cell, "⭐ +2"); toast(who + (g.kind === "star" ? "⭐ 별! 끝날 때 <b>+2점</b>" : g.kind === "ball-star" ? "⚪ 포켓볼이 ⭐ 별로!" : "🎁 카드가 꽉 차서 ⭐ 별로 바꿨어요!"), 2000); }
+    else if (g.kind === "box") { say("card"); sfx("star"); floatText(g.cell, "🎁"); toast(`${who}🎁 기술 카드! <b>${R.EFFECTS[g.card.effect].icon} ${R.EFFECTS[g.card.effect].short}</b>`, 2200); }
+    await wait(1000);
+  }
+  update();
 }
 
 function afterTurn() {
@@ -567,7 +628,7 @@ function afterTurn() {
   G.seen = s.log.length;
   save();
   const pass = fresh.find((e) => e.type === "pass");
-  if (pass && s.phase !== "over") toast(`😵 ${R.POKE[s.players[pass.p].poke].name}는 더 붙일 곳이 없어서 넘어가요`, 2200);
+  if (pass && s.phase !== "over") toast(`😵 ${R.POKE[s.players[pass.p].poke].name}는 더 놓을 곳이 없어서 넘어가요`, 2200);
   startTurn(!!pass);
 }
 
@@ -593,8 +654,10 @@ async function cpuTurn(my) {
   const c = C.chooseCard(s, lv, rand);
   if (c) {
     const card = s.players[p].cards[c.k];
-    R.useCard(s, c.k, c.targets);
-    await showCardUse(p, card, c.targets);
+    const ev = R.useCard(s, c.k, c.targets);
+    await showCardUse(p, card, c.targets, ev);
+    G.seen = s.log.length;
+    if (s.phase === "over") { ui.busy = false; return startTurn(); }
     await wait(500);
   }
   ui.busy = false;

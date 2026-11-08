@@ -16,6 +16,9 @@
     tie: "It's a tie!",
     steal: "Got it!",
     wall: "Rock wall!",
+    flip: "Flip!",
+    wrap: "Surrounded!",
+    seed: "Plant a seed!",
   };
   NUM.forEach((w, i) => (LINES["n" + (i + 1)] = w + "!"));
   for (const [id, n] of Object.entries(EN)) {

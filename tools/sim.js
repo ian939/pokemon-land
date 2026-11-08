@@ -13,6 +13,7 @@ function play(size, lv, seed) {
     const l = s.players[s.turn].cpu;
     const c = C.chooseCard(s, l, rand);
     if (c) R.useCard(s, c.k, c.targets);
+    if (s.phase === "over") break; // 카드로 둘러싸서 판이 다 찼다
     if (R.roll(s).stuck) continue;
     R.place(s, C.choosePlace(s, l, rand));
   }
