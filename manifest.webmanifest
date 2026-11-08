@@ -1,0 +1,1 @@
+{ "name": "포켓몬 땅따먹기", "short_name": "땅따먹기", "start_url": "./", "display": "standalone", "orientation": "any", "background_color": "#d6f0c6", "theme_color": "#7cc46a", "icons": [{ "src": "assets/icon-180.png", "sizes": "180x180", "type": "image/png" }] }

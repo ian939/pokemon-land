@@ -1,0 +1,35 @@
+# 포켓몬 땅따먹기
+
+아이패드에서 둘이 하는(또는 컴퓨터와 하는) 1:1 땅따먹기.
+주사위 숫자만큼 **이어진 빈 칸 한 덩어리를 내 땅에 붙여** 넓히고, 상대 길목을 막는다.
+
+▶ https://ian939.github.io/pokemon-land/
+
+## 규칙 요약
+- 판 10×10(보통) · 8×8(빨리). 1P 왼쪽 아래, 2P 오른쪽 위 모서리에서 시작
+- 주사위 N → 상하좌우로 이어진 빈 칸 N개를 골라 내 땅 옆에 붙임 (대각선 X). 자리가 모자라면 붙일 수 있는 만큼만
+- 먼저 하는 사람은 첫 차례에 절반만 (선공 61% → 45~48%, `tools/sim.js`)
+- 보너스 칸: ⚪ 포켓볼 = 한 번 더 · ⭐ 별 = +2점 · 🎁 상자 = 기술 카드
+- 기술 카드(주사위 전 1장): 🎲 다시 굴리기 · ➕ +2칸 · ⚡ 빼앗기 · 🪨 바위 2개. 포켓몬마다 전용 카드 1장으로 시작, 최대 2장
+- 둘 다 붙일 곳이 없으면 끝. 점수 = 가장 큰 내 땅 덩어리 + 별×2
+
+## 파일
+| 파일 | 하는 일 |
+|---|---|
+| `js/rules.js` | 규칙 엔진 (화면 없음) |
+| `js/cpu.js` | 컴퓨터 쉬움/보통 |
+| `js/app.js` | 화면·터치 |
+| `js/lines.js` | 영어 음성 문장 → `tools/gen-voice.py` 로 녹음 |
+| `js/lock.js`, `css/lock.css` | 확대·복사 잠금 (pad-input-lock) |
+| `js/audio.js` | `<audio>` 재생 (pad-mic-record) |
+
+## 고칠 때
+```
+node tools/test-rules.js     # 규칙
+node tools/sim.js 300        # 밸런스
+py tools/test-ui.py          # 화면 (Playwright, 스크린샷은 tools/shots/)
+py tools/gen-voice.py        # 문장 바꿨을 때
+```
+배포 = `index.html` 의 `APP_VERSION` 과 모든 `?v=` (그리고 app.js 안 audio.js import) 를 같이 올리고 push.
+
+포켓몬 도트 그림은 PokeAPI sprites (gen5). 글꼴 Galmuri (OFL).
