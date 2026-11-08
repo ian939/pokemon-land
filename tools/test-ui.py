@@ -56,9 +56,10 @@ with sync_playwright() as pw:
         pg.click('[data-a="place"]')
         pg.wait_for_function("__T.G.s.turn===1 && !__T.G.ui.busy")
         ok(pg.evaluate(f"__T.G.s.owner[{mid}]") == 0, f"[{name}] 첫 땅을 가운데에")
-        # 2P: 6 → 1P 바로 위에서 가로로 쭉 그어 막기 (모자라면 아래 줄로)
+        # 2P: 6 이 나와도 첫 땅은 3칸까지 → 1P 바로 위에서 가로로 긋기
         roll6()
         need = pg.evaluate("__T.G.s.need")
+        ok(need == 3, f"[{name}] 후공 첫 땅 3칸까지")
         r0 = n // 2 - 1
         path = [r0 * n + c for c in range(n // 2 - 2, n // 2 - 2 + need)]
         x, y = center(path[0]); pg.mouse.move(x, y); pg.mouse.down()

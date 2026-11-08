@@ -109,7 +109,7 @@ function showHelp() {
       <li><span><span class="ball"></span></span><span><b>포켓볼</b>: 주사위 한 번 더! &nbsp; ⭐ <b>별</b>: 끝날 때 +2점 &nbsp; 🎁 <b>상자</b>: 기술 카드</span></li>
       <li><span>🃏</span><span><b>기술 카드</b>는 주사위 굴리기 전에 한 장 써요. 🎲다시 굴리기 · ➕2칸 더 · ⚡상대 칸 빼앗기 · 🪨바위 세우기</span></li>
       <li><span>🏆</span><span>판이 다 차면 끝! <b>가장 크게 이어진 내 땅 칸 수 + 별</b>이 많으면 이겨요. (떨어진 씨앗은 이어 붙여야 점수가 돼요)</span></li>
-      <li><span>⚖️</span><span>먼저 하는 사람은 첫 차례에 <b>1칸만</b> 놓아요. 첫 땅엔 🎁 상자·포켓볼 칸을 못 골라요.</span></li>
+      <li><span>⚖️</span><span>첫 땅은 먼저 하는 사람 <b>1칸</b>, 나중에 하는 사람 <b>3칸까지</b>. 첫 땅엔 🎁 상자·포켓볼 칸을 못 골라요.</span></li>
     </ul>
     <div class="row"><button class="btn big primary" data-v="ok">알겠어요!</button></div>`);
   pick(d).then(() => d.remove());
@@ -566,9 +566,10 @@ async function doRoll(force) {
   }
   say("n" + Math.min(8, ev.need));
   if (ev.first) toast(`⚖️ 먼저 하는 사람은 첫 차례에 <b>1칸만!</b> 판 어디든 골라요`, 2600);
+  else if (ev.second && ev.die > R.SECOND_MAX) toast(`⚖️ 나중에 하는 사람 첫 땅은 <b>${R.SECOND_MAX}칸까지!</b> (${ev.die} → ${ev.need})`, 2600);
   else if (ev.want > ev.die) toast(`➕ ${ev.die} + 2 = <b>${ev.want}칸</b>!`, 2000);
   if (ev.need === 0) toast(`붙일 곳이 없어요! 🌱 떨어진 곳에 <b>${ev.seedNeed}칸</b> 심어요`, 2600);
-  else if (ev.need < ev.want && !ev.first) toast(`이어진 빈 칸이 <b>${ev.need}칸</b>뿐이라 ${ev.need}칸만 붙여요`, 2600);
+  else if (ev.need < ev.want && !ev.first && !ev.second) toast(`이어진 빈 칸이 <b>${ev.need}칸</b>뿐이라 ${ev.need}칸만 붙여요`, 2600);
   ui.sel = [];
   ui.busy = false;
   update();

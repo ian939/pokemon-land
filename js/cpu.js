@@ -38,7 +38,7 @@
       if (!keys.has(key)) { keys.add(key); out.push(sel); }
     };
     const first = !R.hasLand(s, p);
-    const empty = (j) => s.owner[j] === R.EMPTY && !(first && R.firstBan(s, j));
+    const empty = (j) => s.owner[j] === R.EMPTY && !(first && R.firstBan(s, j, p));
     const front = R.frontier(s, p).filter(empty);
     if (s.need && front.length) for (let t = 0; t < n * 3 && out.length < n; t++) add(grow(s, front[(rand() * front.length) | 0], s.need, empty, rand));
     if (R.hasLand(s, p) && s.seedNeed && ns) {

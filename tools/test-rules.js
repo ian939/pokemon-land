@@ -23,7 +23,9 @@ R.place(s, [at(s, 4, 4)]);
 s.turn = 0; s.phase = "roll"; R.roll(s, 2); R.place(s, [at(s, 4, 5), at(s, 5, 5)]); // 덩어리 키워 두기
 ok(s.players[0].home === at(s, 4, 4), "첫 칸 = 집");
 R.roll(s, 2);
-ok(s.need === 2, "후공 첫 차례는 그대로");
+ok(s.need === 2, "후공 첫 차례 2 → 2칸");
+{ const x = R.newGame({ size: 10, pokes: ["pikachu", "squirtle"], seed: 7 }); x.bonus.fill(null); R.roll(x); R.place(x, [at(x, 4, 4)]); R.roll(x, 6);
+  ok(x.need === 3 && x.log.at(-1).second, "후공 첫 차례 6 → 3칸까지"); R.place(x, [at(x, 3, 4), at(x, 3, 5), at(x, 3, 6)]); R.roll(x, 5); ok(x.need === 5, "그다음부턴 주사위 그대로"); }
 throws(() => R.place(s, [at(s, 4, 4), at(s, 3, 4)]), "남의 칸 위엔 못 놓음");
 R.place(s, [at(s, 3, 4), at(s, 3, 5)]); // 피카츄 바로 위에서 막기
 ok(s.owner[at(s, 3, 4)] === 1 && s.players[1].home === at(s, 3, 4), "상대 바로 옆에 첫 덩어리");
@@ -127,7 +129,7 @@ R.roll(s, 3);
 ok(!R.validGroup(s, 1, [at(s, 4, 3), at(s, 4, 4), at(s, 3, 4)]), "후공 첫 덩어리도 상자 칸 못 씀");
 s = ng(); s.turns = 1; put(s, 0, [[5, 5]]);
 s.bonus[at(s, 0, 0)] = "ball"; s.turn = 1; s.phase = "roll";
-R.roll(s, 3); R.place(s, [at(s, 0, 1), at(s, 1, 1), at(s, 1, 0)]); // 첫 덩어리가 모서리 포켓볼을 감쌈
+R.roll(s, 3); R.place(s, [at(s, 0, 1), at(s, 1, 1), at(s, 1, 0)]); // 첫 덩어리(3칸)가 모서리 포켓볼을 감쌈
 ok(s.owner[at(s, 0, 0)] === R.EMPTY, "첫 땅으로는 둘러싸기 안 함");
 
 // 🌱 씨앗: 떨어진 곳에 절반(올림)

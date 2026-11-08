@@ -15,6 +15,7 @@
   const EMPTY = -1, ROCK = 9;
   const STAR_POINTS = 2;
   const MAX_CARDS = 2;
+  const SECOND_MAX = 3; // 나중에 하는 사람 첫 땅 최대 칸 수
   const CAP_FRAC = 0.12; // 둘러싸기 한도 = 판의 12% (10×10 → 12칸) — 크게 두면 둘째 차례에 상대를 가둬 판을 통째로 먹는다
 
   // 기술 카드 효과 4가지
@@ -169,8 +170,8 @@
     return best;
   }
   /** 첫 땅으로 놓을 수 있는 가장 큰 덩어리 (상자·포켓볼 칸 빼고) */
-  function maxFirst(s) {
-    const ok = (j) => s.owner[j] === EMPTY && !firstBan(s, j);
+  function maxFirst(s, p) {
+    const ok = (j) => s.owner[j] === EMPTY && !firstBan(s, j, p);
     let best = 0;
     const done = new Set();
     for (let i = 0; i < s.owner.length; i++) {
@@ -206,11 +207,11 @@
   /** 그 방식이면 몇 칸을 놓아야 하나 */
   const targetOf = (s, kind) => (kind === "seed" ? s.seedNeed : s.need);
   /** 첫 땅엔 🎁 상자·⚪ 포켓볼 칸을 못 고른다 (2026-11-08 사용자 요청 — 첫 차례부터 선물 먹기 없음) */
-  const firstBan = (s, i) => s.bonus[i] === "ball" || s.bonus[i] === "box";
+  const firstBan = (s, i, p) => s.bonus[i] === "ball" || s.bonus[i] === "box";
   /** 지금 고른 칸들에 i 를 더할 수 있나 — 첫 칸은 아무 빈 칸, 그다음은 고른 칸 옆. 붙이면 need, 떨어지면 seedNeed 까지 */
   function canAdd(s, p, sel, i) {
     if (s.owner[i] !== EMPTY || sel.includes(i)) return false;
-    if (!hasLand(s, p) && firstBan(s, i)) return false;
+    if (!hasLand(s, p) && firstBan(s, i, p)) return false;
     if (sel.length && !nbrs(s.size, i).some((j) => sel.includes(j))) return false;
     const next = sel.concat(i);
     return next.length <= targetOf(s, kindOf(s, p, next));
@@ -219,7 +220,7 @@
   function validGroup(s, p, sel) {
     if (!sel.length || new Set(sel).size !== sel.length) return false;
     if (!sel.every((i) => s.owner[i] === EMPTY)) return false;
-    if (!hasLand(s, p) && sel.some((i) => firstBan(s, i))) return false;
+    if (!hasLand(s, p) && sel.some((i) => firstBan(s, i, p))) return false;
     if (sel.length !== targetOf(s, kindOf(s, p, sel))) return false;
     const set = new Set(sel);
     return region(s, sel[0], (j) => set.has(j)).size === sel.length;
@@ -349,12 +350,17 @@
     if (first) force = 1;
     s.dice = s.card === "reroll" ? (Array.isArray(force) ? force : [force || d(), d()]) : [Array.isArray(force) ? force[0] : force || d()];
     s.die = Math.max(...s.dice);
-    const want = first ? 1 : s.die + (s.card === "plus2" ? 2 : 0);
-    s.need = Math.min(want, hasLand(s, p) ? maxAttach(s, p) : maxFirst(s));
+    // 나중에 하는 사람 첫 땅은 3칸까지 — 큰 숫자로 상대 첫 칸 바로 옆을 감싸 길을 다 막지 못하게 (2026-11-08 사용자 요청)
+    // 시뮬레이션 보통끼리 선공:후공 — 그대로 46:53 · 둘 다 1칸 56:43 · 상대 옆 금지 42:56 · 2칸까지 51:46 · 3칸까지 49:49 (600판)
+    // 3칸이면 상대 첫 칸을 완전히 가두는 건 판 모서리일 때뿐 (그래도 씨앗으로 빠져나옴)
+    const second = !first && !hasLand(s, p);
+    let want = first ? 1 : s.die + (s.card === "plus2" ? 2 : 0);
+    if (second) want = Math.min(want, SECOND_MAX);
+    s.need = Math.min(want, hasLand(s, p) ? maxAttach(s, p) : maxFirst(s, p));
     // 씨앗 = 떨어진 곳에 절반(올림)만. 첫 땅이면 어디든 need 그대로
     s.seedNeed = !hasLand(s, p) ? s.need : s.rules.seed ? Math.min(Math.ceil(want / 2), maxSeed(s, p)) : 0;
     s.phase = "place";
-    const e = ev(s, { type: "roll", p, dice: s.dice.slice(), die: s.die, want, need: s.need, seedNeed: s.seedNeed, first });
+    const e = ev(s, { type: "roll", p, dice: s.dice.slice(), die: s.die, want, need: s.need, seedNeed: s.seedNeed, first, second });
     if (s.need === 0 && s.seedNeed === 0) { e.stuck = true; endTurn(s); }
     return e;
   }
@@ -410,7 +416,7 @@
   }
 
   return {
-    EMPTY, ROCK, STAR_POINTS, MAX_CARDS, EFFECTS, POKEMON, POKE,
+    EMPTY, ROCK, STAR_POINTS, SECOND_MAX, MAX_CARDS, EFFECTS, POKEMON, POKE,
     rng, nbrs, hasLand, nextTo, mirror, newGame, cellsOf, frontier, emptyRegion, maxAttach, maxSeed, largestBlob, score,
     kindOf, targetOf, firstBan, canAdd, validGroup, flipsFrom, capturesOf, resolve, stealTargets, wallTargets, isOver, useCard, roll, place,
   };
