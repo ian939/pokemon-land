@@ -40,34 +40,41 @@ with sync_playwright() as pw:
         ok(cs >= 44, f"[{name}] 칸 크기 {cs}px ≥ 44")
         over = pg.evaluate("document.documentElement.scrollWidth > innerWidth || [...document.querySelectorAll('.panel,.boardwrap')].some(e=>{const r=e.getBoundingClientRect();return r.right>innerWidth+1||r.bottom>innerHeight+1||r.left<-1||r.top<-1})")
         ok(not over, f"[{name}] 화면 밖으로 안 넘침")
-        # 주사위 6 → 첫 차례 절반 3
-        pg.evaluate("(()=>{const r=__T.G.s.rand;__T.G.s.rand=()=>0.95;setTimeout(()=>__T.G.s.rand=r,3000)})()")
-        pg.click('[data-a="roll"]')
-        pg.wait_for_function("__T.G.s.phase==='place' && !__T.G.ui.busy")
-        need = pg.evaluate("__T.G.s.need")
-        ok(need == pg.evaluate("Math.ceil(__T.G.s.die/2)"), f"[{name}] 선공 첫 차례 절반 ({need})")
-        # 손가락으로 쭉 긋기: 시작 칸(왼쪽 아래) 위로
-        n = pg.evaluate("__T.G.s.size")
         def center(i):
-            r = pg.evaluate(f"(()=>{{const b=document.querySelector('.cell[data-i=\"{i}\"]').getBoundingClientRect();return [b.x+b.width/2,b.y+b.height/2]}})()")
-            return r
-        path = [(n - 2 - k) * n for k in range(need)]  # 시작 칸 위로 한 줄
+            return pg.evaluate(f"(()=>{{const b=document.querySelector('.cell[data-i=\"{i}\"]').getBoundingClientRect();return [b.x+b.width/2,b.y+b.height/2]}})()")
+        def roll6():
+            pg.evaluate("(()=>{const r=__T.G.s.rand;__T.G.s.rand=()=>0.95;setTimeout(()=>__T.G.s.rand=r,3000)})()")
+            pg.click('[data-a="roll"]')
+            pg.wait_for_function("__T.G.s.phase==='place' && !__T.G.ui.busy")
+        n = pg.evaluate("__T.G.s.size")
+        ok(pg.evaluate("__T.G.s.owner.every(o=>o<0)"), f"[{name}] 빈 판에서 시작")
+        # 1P 첫 차례 = 1칸, 판 가운데 아무 데나
+        roll6()
+        ok(pg.evaluate("__T.G.s.need") == 1, f"[{name}] 선공 첫 차례 1칸")
+        mid = (n // 2) * n + n // 2
+        x, y = center(mid); pg.mouse.click(x, y)
+        pg.click('[data-a="place"]')
+        pg.wait_for_function("__T.G.s.turn===1 && !__T.G.ui.busy")
+        ok(pg.evaluate(f"__T.G.s.owner[{mid}]") == 0, f"[{name}] 첫 땅을 가운데에")
+        # 2P: 6 → 1P 바로 위에서 가로로 쭉 그어 막기 (모자라면 아래 줄로)
+        roll6()
+        need = pg.evaluate("__T.G.s.need")
+        r0 = n // 2 - 1
+        path = [r0 * n + c for c in range(n // 2 - 2, n // 2 - 2 + need)]
         x, y = center(path[0]); pg.mouse.move(x, y); pg.mouse.down()
         for i in path[1:]:
             x, y = center(i); pg.mouse.move(x, y, steps=4)
         pg.mouse.up()
         sel = pg.evaluate("__T.G.ui.sel")
-        ok(sel == path, f"[{name}] 끌어서 {need}칸 고르기 {sel}")
-        # 마지막 칸 톡 = 빠짐, 다시 고르기
-        if need > 1:
-            x, y = center(path[-1]); pg.mouse.click(x, y)
-            ok(pg.evaluate("__T.G.ui.sel.length") == need - 1, f"[{name}] 고른 칸 톡 → 빠짐")
-            pg.mouse.click(x, y)
+        ok(sel == path, f"[{name}] 상대 옆에 끌어서 {need}칸 고르기 {sel}")
+        x, y = center(path[-1]); pg.mouse.click(x, y)
+        ok(pg.evaluate("__T.G.ui.sel.length") == need - 1, f"[{name}] 고른 칸 톡 → 빠짐")
+        pg.mouse.click(x, y)
         ok(pg.is_enabled('[data-a="place"]'), f"[{name}] 놓기 버튼 켜짐")
         pg.screenshot(path=str(SHOTS / f"2-select-{name}.png"))
         pg.click('[data-a="place"]')
-        pg.wait_for_function("__T.G.s.turn===1 && !__T.G.ui.busy")
-        ok(pg.evaluate("__T.R.cellsOf(__T.G.s,0).length") == need + 1, f"[{name}] 놓기 → 2P 차례")
+        pg.wait_for_function("__T.G.s.turn===0 && !__T.G.ui.busy")
+        ok(pg.evaluate("__T.R.cellsOf(__T.G.s,1).length") == need, f"[{name}] 놓기 → 1P 차례")
         # 남은 판은 자동으로 끝까지 (엔진 직접 + 화면 함수)
         pg.evaluate("""async()=>{const C=window.Cpu,R=__T.R;let g=0;
           while(__T.G.s.phase!=='over'&&g++<400){const s=__T.G.s;
@@ -88,15 +95,20 @@ with sync_playwright() as pw:
     pg.click('[data-mode="normal"]'); pg.click('[data-a="new"]'); pg.click('[data-p="squirtle"]')
     pg.wait_for_selector(".board")
     pg.wait_for_function("__T.G && __T.G.s.phase==='roll' && __T.G.s.turn===0 && !__T.G.ui.busy")
-    # +2 카드 쓰기
+    ok(pg.is_disabled('[data-card="0"]'), "맨 첫 차례엔 카드 못 누름")
+    pg.click('[data-a="roll"]')
+    pg.wait_for_function("__T.G.s.phase==='place' && !__T.G.ui.busy")
+    pg.evaluate("__T.doPlace([44])")
+    pg.wait_for_function("__T.G.s.turn===0 && __T.G.s.turns>=2 && __T.G.s.phase==='roll' && !__T.G.ui.busy", timeout=20000)
+    ok(pg.evaluate("__T.R.cellsOf(__T.G.s,1).length") >= 1, "컴퓨터가 첫 땅을 놓음")
+    # 둘째 차례: +2 카드
     pg.click('[data-card="0"]'); pg.click('[data-a="useCard"]')
     pg.wait_for_function("__T.G.s.card==='plus2' && !__T.G.ui.busy")
     pg.click('[data-a="roll"]')
     pg.wait_for_function("__T.G.s.phase==='place' && !__T.G.ui.busy")
-    ok(pg.evaluate("__T.G.s.need") == pg.evaluate("Math.ceil((__T.G.s.die+2)/2)"), "+2 카드 + 첫 차례 절반")
+    ok(pg.evaluate("__T.G.s.need") == pg.evaluate("Math.min(__T.G.s.die+2, __T.R.maxAttach(__T.G.s,0))"), "+2 카드")
     pg.evaluate("__T.doPlace(window.Cpu.choosePlace(__T.G.s,'normal',Math.random))")
-    pg.wait_for_function("__T.G.s.turn===0 && __T.G.s.turns>=2 && !__T.G.ui.busy", timeout=20000)
-    ok(pg.evaluate("__T.R.cellsOf(__T.G.s,1).length") > 1, "컴퓨터가 땅을 붙임")
+    pg.wait_for_function("__T.G.s.turn===0 && __T.G.s.turns>=4 && !__T.G.ui.busy", timeout=20000)
     pg.screenshot(path=str(SHOTS / "4-vs-cpu.png"))
     ok(not errs, f"[cpu] 오류 없음 {errs[:3]}")
     b.close()

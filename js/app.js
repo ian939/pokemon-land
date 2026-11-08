@@ -1,5 +1,5 @@
 /* 포켓몬 땅따먹기 — 화면 (rules.js 의 엔진을 쓴다) */
-import * as A from "./audio.js?v=2026-11-08a";
+import * as A from "./audio.js?v=2026-11-08b";
 
 const R = window.Rules, C = window.Cpu, LINES = window.Lines.LINES;
 const QS = new URLSearchParams(location.search);
@@ -100,13 +100,14 @@ function renderTitle() {
 function showHelp() {
   const d = modal(`<h2>📖 이렇게 놀아요</h2>
     <ul class="help">
+      <li><span>🗺️</span><span>처음엔 판이 비어 있어요. <b>첫 땅은 어디든</b> 놓을 수 있어요 — 상대 바로 옆에 붙어서 막아도 돼요!</span></li>
       <li><span>🎲</span><span>주사위를 굴려요. 나온 숫자만큼 <b>이어진 칸</b>을 골라 <b>내 땅에 붙여요</b>. (옆으로·위아래로만, 대각선은 안 돼요)</span></li>
       <li><span>👆</span><span>내 땅 옆 빛나는 칸부터 손가락으로 쭉 그으면 돼요. 한 칸씩 톡톡 눌러도 돼요. 고른 칸을 다시 누르면 빠져요.</span></li>
       <li><span>🚧</span><span>상대가 넓어질 길을 먼저 막아요! 붙일 곳이 없으면 차례가 넘어가요.</span></li>
       <li><span><span class="ball"></span></span><span><b>포켓볼</b>: 주사위 한 번 더! &nbsp; ⭐ <b>별</b>: 끝날 때 +2점 &nbsp; 🎁 <b>상자</b>: 기술 카드</span></li>
       <li><span>🃏</span><span><b>기술 카드</b>는 주사위 굴리기 전에 한 장 써요. 🎲다시 굴리기 · ➕2칸 더 · ⚡상대 칸 빼앗기 · 🪨바위 세우기</span></li>
       <li><span>🏆</span><span>둘 다 더 붙일 곳이 없으면 끝! <b>가장 크게 이어진 내 땅 칸 수 + 별</b>이 많으면 이겨요.</span></li>
-      <li><span>⚖️</span><span>먼저 하는 사람은 첫 차례에 주사위 숫자의 <b>반만</b> 붙여요.</span></li>
+      <li><span>⚖️</span><span>먼저 하는 사람은 첫 차례에 <b>1칸만</b> 놓아요.</span></li>
     </ul>
     <div class="row"><button class="btn big primary" data-v="ok">알겠어요!</button></div>`);
   pick(d).then(() => d.remove());
@@ -236,6 +237,8 @@ function placeMons(hop) {
   [0, 1].forEach((p) => {
     const m = $(".mon.m" + p);
     if (!m) return;
+    m.classList.toggle("hidden", G.mon[p] == null); // 아직 땅이 없으면 숨김
+    if (G.mon[p] == null) return;
     const { x, y, cs } = cellXY(G.mon[p]);
     m.style.left = x - cs * 0.675 + "px";
     m.style.top = y - cs * 0.85 + "px";
@@ -259,7 +262,7 @@ function update() {
   const s = G.s, ui = G.ui, n = s.size, p = s.turn;
   const placing = s.phase === "place" && !isCpu(p) && !ui.busy;
   const can = new Set();
-  if (placing && ui.sel.length < s.need) {
+  if (placing && ui.sel.length < s.need && (ui.sel.length || R.hasLand(s, p))) { // 첫 덩어리 첫 칸은 어디든이라 안 빛나게
     for (let i = 0; i < s.owner.length; i++) if (R.canAdd(s, p, ui.sel, i)) can.add(i);
   }
   let targets = new Set();
@@ -324,7 +327,7 @@ function renderPanel(p) {
   const sc = R.score(s, p);
   $(".score", el).innerHTML = `<span class="land"><i></i>${sc.land}칸</span>${pl.stars ? `<span>⭐×${pl.stars}</span>` : ""}`;
   // 카드
-  const mine = now && !isCpu(p) && !ui.busy && s.phase === "roll" && !s.card;
+  const mine = now && !isCpu(p) && !ui.busy && s.phase === "roll" && !s.card && s.turns > 0;
   let cards = pl.cards.map((c, k) => {
     const e = R.EFFECTS[c.effect];
     return `<button class="card ${c.own ? "own" : ""} ${mine && ui.card == null ? "usable" : ""} ${ui.card === k && now ? "active" : ""}" data-card="${k}" ${mine ? "" : "disabled"}>
@@ -357,7 +360,7 @@ function renderPanel(p) {
     const full = ui.sel.length === s.need;
     act.innerHTML = `${ui.diceHtml || ""}
       <div class="count">${ui.sel.length} <small>/ ${s.need}</small></div>
-      <div class="hint">${full ? "좋아요! <b>놓기</b>를 눌러요" : ui.sel.length ? "이어서 더 골라요" : "빛나는 칸부터 쭉 그어요"}</div>
+      <div class="hint">${full ? "좋아요! <b>놓기</b>를 눌러요" : ui.sel.length ? "이어서 더 골라요" : !R.hasLand(s, p) ? "첫 땅은 <b>판 어디든!</b><br>상대 바로 옆에서 막아도 돼요" : "빛나는 칸부터 쭉 그어요"}</div>
       <div class="dice-row"><button class="btn go big" data-a="place" ${full ? "" : "disabled"}>놓기</button>
       <button class="btn" data-a="clear" ${ui.sel.length ? "" : "disabled"}>↺</button></div>`;
   }
@@ -489,7 +492,7 @@ async function showCardUse(p, c, targets) {
   await wait(900);
 }
 function checkMonCell() {
-  [0, 1].forEach((p) => { if (G.s.owner[G.mon[p]] !== p) G.mon[p] = G.s.players[p].home; });
+  [0, 1].forEach((p) => { if (G.mon[p] != null && G.s.owner[G.mon[p]] !== p) G.mon[p] = G.s.players[p].home; });
   placeMons(true);
 }
 
@@ -518,9 +521,9 @@ async function doRoll(force) {
     return afterTurn();
   }
   say("n" + Math.min(8, ev.need));
-  if (ev.half) toast(`⚖️ 먼저 하는 사람은 첫 차례에 반만! <b>${ev.die} → ${ev.need}칸</b>`, 2600);
+  if (ev.first) toast(`⚖️ 먼저 하는 사람은 첫 차례에 <b>1칸만!</b> 판 어디든 골라요`, 2600);
   else if (ev.want > ev.die) toast(`➕ ${ev.die} + 2 = <b>${ev.want}칸</b>!`, 2000);
-  if (ev.need < ev.want && !ev.half) toast(`이어진 빈 칸이 <b>${ev.need}칸</b>뿐이라 ${ev.need}칸만 붙여요`, 2600);
+  if (ev.need < ev.want) toast(`이어진 빈 칸이 <b>${ev.need}칸</b>뿐이라 ${ev.need}칸만 붙여요`, 2600);
   ui.sel = [];
   ui.busy = false;
   update();

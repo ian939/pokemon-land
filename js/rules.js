@@ -2,6 +2,7 @@
  *
  * 판: size×size 칸. owner[i] = -1 빈 칸 · 0/1 플레이어 · ROCK 바위
  * 한 차례: (카드 1장 쓰기) → 주사위 → 이어진 빈 칸 need 개를 한 덩어리로 골라 내 땅에 붙인다.
+ * 시작 칸은 없다 — 첫 덩어리는 판 어디든 (상대 바로 옆에서 막아도 된다). 2026-11-08 사용자 요청
  * 연결은 상하좌우만. 점수 = 가장 큰 내 땅 덩어리 + 별 ×2.
  */
 (function (root, factory) {
@@ -56,19 +57,17 @@
     if (c < size - 1) out.push(i + 1);
     return out;
   }
-  const startCell = (size, p) => (p === 0 ? (size - 1) * size : size - 1); // 1P 왼쪽 아래, 2P 오른쪽 위
   const mirror = (size, i) => size * size - 1 - i; // 가운데 기준 점대칭 (두 시작 칸이 서로 맞바뀜)
 
   // 보너스 칸: 가운데 띠에 점대칭으로 3쌍 (포켓볼·별·상자)
   function placeBonus(size, rand) {
     const bonus = new Array(size * size).fill(null);
     const kinds = ["ball", "star", "box"];
-    const s0 = startCell(size, 0), s1 = startCell(size, 1);
     const dist = (a, b) => Math.abs(((a / size) | 0) - ((b / size) | 0)) + Math.abs((a % size) - (b % size));
     const ok = (i) => {
       const m = mirror(size, i);
       if (m === i || bonus[i] || bonus[m]) return false;
-      if (dist(i, s0) < 4 || dist(i, s1) < 4 || dist(m, s0) < 4 || dist(m, s1) < 4) return false;
+      if (dist(i, m) < 3) return false; // 가운데에 너무 몰리지 않게
       for (let j = 0; j < bonus.length; j++) if (bonus[j] && (dist(i, j) < 2 || dist(m, j) < 2)) return false;
       return true;
     };
@@ -95,7 +94,7 @@
         cpu: (opt.cpu && opt.cpu[p]) || null,
         cards: [{ effect: POKE[opt.pokes[p]].effect, name: POKE[opt.pokes[p]].move, own: true }],
         stars: 0,
-        home: startCell(size, p),
+        home: null, // 첫 덩어리의 첫 칸 (빼앗기 못 함)
       })),
       turn: opt.first || 0,
       phase: "roll", // roll → place → (roll 또는 다음 사람) … over
@@ -106,8 +105,6 @@
       log: [],
       rand,
     };
-    owner[startCell(size, 0)] = 0;
-    owner[startCell(size, 1)] = 1;
     return s;
   }
 
@@ -117,8 +114,10 @@
     for (let i = 0; i < s.owner.length; i++) if (s.owner[i] === p) out.push(i);
     return out;
   }
-  /** 내 땅에 닿은 빈 칸 */
+  const hasLand = (s, p) => s.owner.includes(p);
+  /** 내 땅에 닿은 빈 칸 (땅이 아직 없으면 모든 빈 칸) */
   function frontier(s, p) {
+    if (!hasLand(s, p)) return s.owner.map((o, i) => (o === EMPTY ? i : -1)).filter((i) => i >= 0);
     const set = new Set();
     for (let i = 0; i < s.owner.length; i++) {
       if (s.owner[i] !== p) continue;
@@ -171,6 +170,7 @@
   /** 지금 고른 칸들에 i 를 더할 수 있나 — 첫 칸은 내 땅 옆, 그다음은 고른 칸 옆 */
   function canAdd(s, p, sel, i) {
     if (s.owner[i] !== EMPTY || sel.includes(i) || sel.length >= s.need) return false;
+    if (sel.length === 0 && !hasLand(s, p)) return true; // 첫 덩어리: 어디든
     const touch = sel.length === 0 ? (j) => s.owner[j] === p : (j) => sel.includes(j);
     return nbrs(s.size, i).some(touch);
   }
@@ -178,7 +178,7 @@
   function validGroup(s, p, sel) {
     if (sel.length !== s.need || new Set(sel).size !== sel.length) return false;
     if (!sel.every((i) => s.owner[i] === EMPTY)) return false;
-    if (!sel.some((i) => nbrs(s.size, i).some((j) => s.owner[j] === p))) return false;
+    if (hasLand(s, p) && !sel.some((i) => nbrs(s.size, i).some((j) => s.owner[j] === p))) return false;
     const set = new Set(sel), seen = new Set([sel[0]]), q = [sel[0]];
     while (q.length) {
       const k = q.pop();
@@ -212,6 +212,7 @@
     const p = s.turn, pl = s.players[p];
     must(s.phase === "roll", "주사위 전에만 카드를 써요");
     must(!s.card, "카드는 한 차례에 1장");
+    must(s.turns > 0, "맨 첫 차례엔 카드를 못 써요");
     const card = pl.cards[k];
     must(card, "카드 없음");
     if (card.effect === "steal") {
@@ -233,16 +234,17 @@
     const p = s.turn;
     must(s.phase === "roll", "지금은 주사위 차례가 아니에요");
     const d = () => 1 + ((s.rand() * 6) | 0);
+    // 먼저 하는 사람은 첫 차례에 1칸만 (주사위 = 1) — 시작이 자유라 선공이 가운데를 먼저 차지한다.
+    // 시뮬레이션: 그냥 61% · 절반 60% · 1칸 54% (컴퓨터 보통끼리, tools/sim.js)
+    const first = s.turns === 0;
+    if (first) force = 1;
     s.dice = s.card === "reroll" ? (Array.isArray(force) ? force : [force || d(), d()]) : [Array.isArray(force) ? force[0] : force || d()];
     s.die = Math.max(...s.dice);
-    let want = s.die + (s.card === "plus2" ? 2 : 0);
-    // 먼저 하는 사람은 첫 차례에 절반만 (올림) — 시뮬레이션상 선공 61% → 48%
-    const half = s.turns === 0;
-    if (half) want = Math.ceil(want / 2);
+    const want = first ? 1 : s.die + (s.card === "plus2" ? 2 : 0);
     const room = maxAttach(s, p);
     s.need = Math.min(want, room);
     s.phase = "place";
-    const e = ev(s, { type: "roll", p, dice: s.dice.slice(), die: s.die, want, need: s.need, half });
+    const e = ev(s, { type: "roll", p, dice: s.dice.slice(), die: s.die, want, need: s.need, first });
     if (s.need === 0) { e.stuck = true; endTurn(s); }
     return e;
   }
@@ -253,6 +255,7 @@
     must(s.phase === "place", "지금은 놓는 차례가 아니에요");
     must(validGroup(s, p, sel), "이어진 " + s.need + "칸을 내 땅에 붙여야 해요");
     const got = [];
+    if (pl.home == null) pl.home = sel[0];
     for (const i of sel) {
       s.owner[i] = p;
       const b = s.bonus[i];
@@ -303,7 +306,7 @@
 
   return {
     EMPTY, ROCK, STAR_POINTS, MAX_CARDS, EFFECTS, POKEMON, POKE,
-    rng, nbrs, startCell, mirror, newGame, cellsOf, frontier, emptyRegion, maxAttach, largestBlob, score,
+    rng, nbrs, hasLand, mirror, newGame, cellsOf, frontier, emptyRegion, maxAttach, largestBlob, score,
     canAdd, validGroup, stealTargets, wallTargets, isOver, useCard, roll, place,
   };
 });

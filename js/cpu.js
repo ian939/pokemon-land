@@ -92,7 +92,7 @@
   /** 주사위 전에 카드를 쓸지: { k, targets } 또는 null */
   function chooseCard(s, level, rand) {
     const p = s.turn, pl = s.players[p];
-    if (!pl.cards.length) return null;
+    if (!pl.cards.length || s.turns === 0) return null;
     const tries = [];
     pl.cards.forEach((c, k) => {
       if (c.effect === "steal") {

@@ -5,12 +5,29 @@ let n = 0, bad = 0;
 const ok = (c, m) => { n++; if (!c) { bad++; console.log("✗", m); } };
 const throws = (f, m) => { try { f(); ok(false, m + " (안 막힘)"); } catch (e) { ok(true, m); } };
 const at = (s, r, c) => r * s.size + c;
-const g0 = () => R.newGame({ size: 10, pokes: ["pikachu", "squirtle"], seed: 7 });
+// 예전 시험들은 모서리에 1칸씩 깔린 판에서 한다 (지금 규칙은 빈 판에서 시작)
+const corners = (s) => { const n = s.size; s.owner[(n - 1) * n] = 0; s.owner[n - 1] = 1; s.players[0].home = (n - 1) * n; s.players[1].home = n - 1; return s; };
+const g0 = () => corners(R.newGame({ size: 10, pokes: ["pikachu", "squirtle"], seed: 7 }));
 const g = () => { const s = g0(); s.turns = 1; return s; }; // 첫 차례 절반 규칙을 뺀 판
 
-// 시작
-let s = g0();
-ok(s.owner[at(s, 9, 0)] === 0 && s.owner[at(s, 0, 9)] === 1, "시작 칸 모서리");
+// 시작: 빈 판, 첫 덩어리는 어디든 — 상대 바로 옆도
+let s = R.newGame({ size: 10, pokes: ["pikachu", "squirtle"], seed: 7 }); s.bonus.fill(null);
+ok(s.owner.every((o) => o === R.EMPTY), "빈 판에서 시작");
+ok(R.canAdd({ ...s, need: 3 }, 0, [], at(s, 4, 4)), "첫 칸은 어디든");
+throws(() => R.useCard(s, 0, [at(s, 4, 4)]), "맨 첫 차례엔 카드 못 씀");
+R.roll(s, 6);
+ok(s.need === 1 && s.die === 1, "선공 첫 차례 1칸");
+R.place(s, [at(s, 4, 4)]);
+s.turn = 0; s.phase = "roll"; R.roll(s, 2); R.place(s, [at(s, 4, 5), at(s, 5, 5)]); // 덩어리 키워 두기
+ok(s.players[0].home === at(s, 4, 4), "첫 칸 = 집");
+R.roll(s, 2);
+ok(s.need === 2, "후공 첫 차례는 그대로");
+throws(() => R.place(s, [at(s, 4, 4), at(s, 3, 4)]), "남의 칸 위엔 못 놓음");
+R.place(s, [at(s, 3, 4), at(s, 3, 5)]); // 피카츄 바로 위에서 막기
+ok(s.owner[at(s, 3, 4)] === 1 && s.players[1].home === at(s, 3, 4), "상대 바로 옆에 첫 덩어리");
+R.roll(s, 2);
+throws(() => R.place(s, [at(s, 0, 0), at(s, 0, 1)]), "땅이 생긴 뒤엔 붙여야 함");
+s = g0();
 ok(s.players[0].cards[0].effect === "steal" && s.players[1].cards[0].effect === "plus2", "전용 카드");
 const bon = s.bonus.map((b, i) => [b, i]).filter((x) => x[0]);
 ok(bon.length === 6, "보너스 6칸");
@@ -19,7 +36,7 @@ ok(bon.every(([b, i]) => s.bonus[R.mirror(10, i)] === b), "보너스 점대칭")
 // 주사위·놓기
 s = g0(); s.bonus.fill(null);
 R.roll(s, 5);
-ok(s.need === 3 && s.log[0].half, "선공 첫 차례 절반 (5 → 3)");
+ok(s.need === 1 && s.log[0].first, "선공 첫 차례 1칸");
 s = g(); s.bonus.fill(null); s.turns = 1;
 R.roll(s, 3);
 ok(s.need === 3 && s.phase === "place", "주사위 3 → 3칸");
@@ -75,7 +92,7 @@ R.useCard(s, 0, [at(s, 7, 0)]);
 ok(s.owner[at(s, 7, 0)] === 0 && s.players[0].cards.length === 0, "빼앗음");
 throws(() => R.useCard(s, 0, []), "카드 없음");
 // 바위
-s = R.newGame({ size: 8, pokes: ["bulbasaur", "eevee"], seed: 3 }); s.turns = 1;
+s = corners(R.newGame({ size: 8, pokes: ["bulbasaur", "eevee"], seed: 3 })); s.turns = 1;
 const empt = R.wallTargets(s);
 throws(() => R.useCard(s, 0, [empt[0]]), "바위 2칸 필요");
 R.useCard(s, 0, [empt[0], empt[1]]);
