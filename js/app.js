@@ -1,5 +1,5 @@
 /* 포켓몬 땅따먹기 — 화면 (rules.js 의 엔진을 쓴다) */
-import * as A from "./audio.js?v=2026-11-08d";
+import * as A from "./audio.js?v=2026-11-08e";
 
 const R = window.Rules, C = window.Cpu, LINES = window.Lines.LINES;
 const QS = new URLSearchParams(location.search);
