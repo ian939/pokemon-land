@@ -1,5 +1,5 @@
 /* 포켓몬 땅따먹기 — 화면 (rules.js 의 엔진을 쓴다) */
-import * as A from "./audio.js?v=2026-11-08c";
+import * as A from "./audio.js?v=2026-11-08d";
 
 const R = window.Rules, C = window.Cpu, LINES = window.Lines.LINES;
 const QS = new URLSearchParams(location.search);
@@ -105,7 +105,7 @@ function showHelp() {
       <li><span>👆</span><span>내 땅 옆 빛나는 칸부터 손가락으로 쭉 그으면 돼요. 한 칸씩 톡톡 눌러도 돼요. 고른 칸을 다시 누르면 빠져요.</span></li>
       <li><span>🌱</span><span><b>씨앗 심기</b>: 내 땅에서 <b>떨어진 곳</b>에도 놓을 수 있어요. 대신 숫자의 <b>절반</b>만! (5 → 3칸)</span></li>
       <li><span>🔄</span><span><b>끼우기</b>: 상대 칸 1~2개를 <b>내 칸 사이에 일자로 끼우면</b> 내 땅으로 뒤집혀요! (상대 첫 칸은 안 돼요)</span></li>
-      <li><span>🏠</span><span><b>둘러싸기</b>: 빈 칸을 내 땅으로 <b>빙 둘러싸면</b> (판 끝·바위도 벽) 안쪽이 한꺼번에 내 땅! 작은 곳(${Math.round(setup.size * setup.size * 0.12)}칸 이하)만 돼요.</span></li>
+      <li><span>🏠</span><span><b>둘러싸기</b>: 빈 칸을 내 땅으로 <b>빙 둘러싸면</b> (판 끝·바위도 벽) 안쪽이 한꺼번에 내 땅! 작은 곳(${Math.round(setup.size * setup.size * 0.12)}칸 이하)만 돼요. 칸을 고르면 <b>🏠 차지할 곳</b>·<b>🔄 뒤집힐 칸</b>이 미리 반짝여요!</span></li>
       <li><span><span class="ball"></span></span><span><b>포켓볼</b>: 주사위 한 번 더! &nbsp; ⭐ <b>별</b>: 끝날 때 +2점 &nbsp; 🎁 <b>상자</b>: 기술 카드</span></li>
       <li><span>🃏</span><span><b>기술 카드</b>는 주사위 굴리기 전에 한 장 써요. 🎲다시 굴리기 · ➕2칸 더 · ⚡상대 칸 빼앗기 · 🪨바위 세우기</span></li>
       <li><span>🏆</span><span>판이 다 차면 끝! <b>가장 크게 이어진 내 땅 칸 수 + 별</b>이 많으면 이겨요. (떨어진 씨앗은 이어 붙여야 점수가 돼요)</span></li>
@@ -268,6 +268,14 @@ function update() {
   else if (placing && R.hasLand(s, p) && s.need) R.frontier(s, p).forEach((i) => can.add(i)); // 붙이기 시작 칸만 빛남 (씨앗은 아무 데나)
   const seedSel = placing && ui.sel.length && R.kindOf(s, p, ui.sel) === "seed";
   const ban = placing && !R.hasLand(s, p); // 첫 땅: 상자·포켓볼 칸 못 고름
+  // 미리 보기: 지금 고른 칸을 놓으면 뒤집힐 칸 🔄 · 둘러싸여 차지할 칸 🏠 (컴퓨터가 고를 때도 보여 줌)
+  const pvCap = new Map(), pvFlip = new Set();
+  if (s.phase === "place" && ui.sel.length && ui.sel.every((i) => s.owner[i] === R.EMPTY)) {
+    const r = R.resolve(s, p, ui.sel);
+    r.flips.forEach((i) => pvFlip.add(i));
+    r.caps.forEach((c) => c.cells.forEach((i) => pvCap.set(i, c.p)));
+  }
+  ui.preview = { cap: pvCap, flip: pvFlip };
   let targets = new Set();
   if (ui.card != null && !isCpu(p)) {
     const eff = s.players[p].cards[ui.card].effect;
@@ -289,6 +297,15 @@ function update() {
     cl.toggle("done", si >= 0 && done);
     cl.toggle("seedsel", si >= 0 && !!seedSel);
     cl.toggle("ban", ban && R.firstBan(s, i) && o === R.EMPTY);
+    cl.toggle("pv-cap", pvCap.has(i));
+    cl.toggle("pv-flip", pvFlip.has(i));
+    if (pvCap.has(i)) el.style.setProperty("--pvc", `var(--c${pvCap.get(i)})`);
+    const pvTxt = pvCap.has(i) ? "🏠" : pvFlip.has(i) ? "🔄" : "";
+    let pv = el.querySelector(".pv");
+    if (pvTxt) {
+      if (!pv) { pv = document.createElement("span"); pv.className = "pv"; el.appendChild(pv); }
+      pv.textContent = pvTxt;
+    } else if (pv) pv.remove();
     cl.toggle("target", targets.has(i) && !ui.targets.includes(i) && s.owner[i] !== R.EMPTY); // 빼앗기만 표시 (바위는 빈 칸 전부라 표시 안 함)
     cl.toggle("picked", ui.targets.includes(i));
     el.style.setProperty("--pcs", si >= 0 ? `var(--c${p})` : "");
@@ -372,7 +389,11 @@ function renderPanel(p) {
       : !R.hasLand(s, p) ? "첫 땅은 <b>판 어디든!</b><br>상대 바로 옆에서 막아도 돼요"
       : s.need ? `빛나는 칸부터 쭉 그어 <b>${s.need}칸</b> 붙여요<br>${seedTxt}`
       : `붙일 곳이 없어요!<br>${seedTxt}`;
+    const pv = ui.preview || { cap: new Map(), flip: new Set() };
+    const mineCap = [...pv.cap.values()].filter((q) => q === p).length, theirCap = pv.cap.size - mineCap;
+    const pvLine = [mineCap ? `🏠 <b>${mineCap}칸</b> 차지!` : "", pv.flip.size ? `🔄 <b>${pv.flip.size}칸</b> 뒤집기!` : "", theirCap ? `<span class="warn">⚠️ 상대가 ${theirCap}칸 차지해요</span>` : ""].filter(Boolean).join("<br>");
     act.innerHTML = `${ui.diceHtml || ""}
+      ${pvLine ? `<div class="pvline">${pvLine}</div>` : ""}
       <div class="count ${kind === "seed" ? "seed" : ""}">${kind === "seed" ? "🌱" : ""}${ui.sel.length} <small>/ ${tgt}</small></div>
       <div class="hint">${hint}</div>
       <div class="dice-row"><button class="btn go big" data-a="place" ${full ? "" : "disabled"}>놓기</button>
@@ -778,6 +799,6 @@ addEventListener("online", () => checkUpdate(true));
 setInterval(() => checkUpdate(), 10 * 60000);
 
 // 시험용 손잡이
-if (TEST) window.__T = { get G() { return G; }, R, setup: (o) => Object.assign(setup, o), startGame, doRoll, doPlace, renderTitle };
+if (TEST) window.__T = { get G() { return G; }, R, setup: (o) => Object.assign(setup, o), startGame, doRoll, doPlace, renderTitle, update };
 
 renderTitle();

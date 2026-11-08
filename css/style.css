@@ -209,6 +209,14 @@ button:focus { outline: none; }
 .cell.flip::before { animation: flip .45s ease-out; }
 @keyframes flip { 0% { transform: rotateY(0); } 50% { transform: rotateY(90deg); } 100% { transform: rotateY(0); } }
 .act .count.seed { color: #2f8a3a; }
+/* 미리 보기 — 놓으면 생길 일. 표시는 모서리에 (가운데 내용 가리지 않게) */
+.cell.pv-cap::before { background: color-mix(in srgb, var(--pvc) 45%, #fff); box-shadow: inset 0 0 0 3px var(--pvc); outline: 3px dashed #fff; outline-offset: -8px; animation: pvglow .9s ease-in-out infinite; }
+@keyframes pvglow { 50% { opacity: .55; } }
+.cell.pv-flip::before { animation: pvshake .7s ease-in-out infinite; }
+@keyframes pvshake { 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+.cell .pv { position: absolute; right: 2%; top: 1%; font-size: calc(var(--cell) * .3); line-height: 1; pointer-events: none; z-index: 2; filter: drop-shadow(0 1px 0 #fff); }
+.act .pvline { font-size: 17px; line-height: 1.35; background: #fff6c8; border: 2px solid var(--ink); border-radius: 12px; padding: 4px 10px; }
+.act .pvline .warn { color: #c0392b; }
 .cell.dimmed::before { filter: grayscale(.8) brightness(1.15); opacity: .55; }
 
 /* 판 위 포켓몬 */
